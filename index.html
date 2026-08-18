@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Face ID — Recognize</title>
+<style>
+  :root{
+    --ink:#0e1116;
+    --paper:#f6f5f2;
+    --line:#d8d5cd;
+    --accent:#3a6b5c;
+    --accent-dim:#c8ded6;
+    --warn:#a4432c;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--ink);color:var(--paper);font-family:var(--sans);}
+  body{
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:32px 16px 64px;
+  }
+  header{
+    width:100%;
+    max-width:920px;
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    border-bottom:1px solid #2a2f38;
+    padding-bottom:16px;
+    margin-bottom:24px;
+  }
+  h1{
+    font-size:20px;
+    letter-spacing:0.02em;
+    margin:0;
+    font-weight:600;
+  }
+  h1 span{color:var(--accent);}
+  .status-tag{
+    font-family:var(--mono);
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    padding:4px 10px;
+    border-radius:999px;
+    border:1px solid #3a3f4a;
+    color:#9aa2b1;
+  }
+  .status-tag.ready{color:var(--accent);border-color:var(--accent);}
+  .status-tag.warn{color:#e8a978;border-color:#e8a978;}
+
+  main{
+    width:100%;
+    max-width:920px;
+    display:grid;
+    grid-template-columns: 1.3fr 1fr;
+    gap:24px;
+  }
+  @media (max-width: 780px){
+    main{grid-template-columns:1fr;}
+  }
+
+  .stage{
+    position:relative;
+    background:#000;
+    border-radius:12px;
+    overflow:hidden;
+    border:1px solid #2a2f38;
+    aspect-ratio: 4/3;
+  }
+  video, canvas{
+    position:absolute;
+    top:0;left:0;
+    width:100%;
+    height:100%;
+    object-fit:cover;
+  }
+  video{transform:scaleX(-1);}
+  canvas{transform:scaleX(-1);}
+
+  .panel{
+    background:#161a22;
+    border:1px solid #2a2f38;
+    border-radius:12px;
+    padding:20px;
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+  }
+  .panel h2{
+    font-size:13px;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    color:#9aa2b1;
+    margin:0;
+    font-weight:600;
+  }
+  .row{display:flex;gap:8px;}
+  input[type=text]{
+    flex:1;
+    background:#0e1116;
+    border:1px solid #2a2f38;
+    color:var(--paper);
+    padding:10px 12px;
+    border-radius:8px;
+    font-family:var(--sans);
+    font-size:14px;
+  }
+  input[type=text]:focus{outline:none;border-color:var(--accent);}
+  button{
+    font-family:var(--sans);
+    font-weight:600;
+    font-size:13px;
+    padding:10px 16px;
+    border-radius:8px;
+    border:1px solid transparent;
+    cursor:pointer;
+    transition:opacity 0.15s ease;
+  }
+  button:hover{opacity:0.85;}
+  button:disabled{opacity:0.4;cursor:not-allowed;}
+  .btn-primary{background:var(--accent);color:#0e1116;}
+  .btn-ghost{background:transparent;border-color:#3a3f4a;color:var(--paper);}
+  .btn-danger{background:transparent;border-color:var(--warn);color:var(--warn);}
+
+  .people{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    max-height:220px;
+    overflow-y:auto;
+  }
+  .person{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:8px 10px;
+    background:#0e1116;
+    border-radius:8px;
+    border:1px solid #2a2f38;
+    font-size:13px;
+  }
+  .person button{
+    padding:4px 8px;
+    font-size:11px;
+  }
+  .empty{
+    color:#5b6472;
+    font-size:13px;
+    font-style:italic;
+  }
+  .hint{
+    font-size:12px;
+    color:#7a8290;
+    line-height:1.5;
+  }
+  .divider{height:1px;background:#2a2f38;}
+  footer{
+    max-width:920px;
+    width:100%;
+    margin-top:24px;
+    font-size:11px;
+    color:#5b6472;
+    font-family:var(--mono);
+    text-align:center;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>face<span>·</span>id</h1>
+  <div id="statusTag" class="status-tag">loading models…</div>
+</header>
+
+<main>
+  <div class="stage">
+    <video id="video" autoplay muted playsinline></video>
+    <canvas id="overlay"></canvas>
+  </div>
+
+  <div class="panel">
+    <div>
+      <h2>Register a face</h2>
+      <p class="hint">Look at the camera, type a name, and save. You can save a few times per person from different angles for better accuracy.</p>
+      <div class="row" style="margin-top:10px;">
+        <input type="text" id="nameInput" placeholder="Name">
+        <button class="btn-primary" id="registerBtn" disabled>Save</button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div>
+      <h2>Known people (<span id="peopleCount">0</span>)</h2>
+      <div class="people" id="peopleList">
+        <div class="empty">No one registered yet.</div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <button class="btn-ghost" id="clearBtn">Clear all data</button>
+  </div>
+</main>
+
+<footer>
+  runs fully in your browser — nothing is uploaded anywhere
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/face-api.js/0.22.2/face-api.min.js"></script>
+<script>
+const MODEL_URL = "https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights";
+const video = document.getElementById("video");
+const overlay = document.getElementById("overlay");
+const statusTag = document.getElementById("statusTag");
+const registerBtn = document.getElementById("registerBtn");
+const nameInput = document.getElementById("nameInput");
+const peopleList = document.getElementById("peopleList");
+const peopleCount = document.getElementById("peopleCount");
+const clearBtn = document.getElementById("clearBtn");
+
+let knownFaces = []; // {name, descriptors: [Float32Array as arrays]}
+let faceMatcher = null;
+let modelsReady = false;
+
+const STORAGE_KEY = "faceid_known_faces_v1";
+
+function loadFromStorage(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      const parsed = JSON.parse(raw);
+      knownFaces = parsed.map(p => ({
+        name: p.name,
+        descriptors: p.descriptors.map(d => new Float32Array(d))
+      }));
+    }
+  }catch(e){ console.warn("Could not load saved faces", e); }
+}
+
+function saveToStorage(){
+  try{
+    const serializable = knownFaces.map(p => ({
+      name: p.name,
+      descriptors: p.descriptors.map(d => Array.from(d))
+    }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
+  }catch(e){ console.warn("Could not save faces", e); }
+}
+
+function rebuildMatcher(){
+  if(knownFaces.length === 0){
+    faceMatcher = null;
+    return;
+  }
+  const labeled = knownFaces.map(p =>
+    new faceapi.LabeledFaceDescriptors(p.name, p.descriptors)
+  );
+  faceMatcher = new faceapi.FaceMatcher(labeled, 0.55);
+}
+
+function renderPeopleList(){
+  peopleCount.textContent = knownFaces.length;
+  if(knownFaces.length === 0){
+    peopleList.innerHTML = '<div class="empty">No one registered yet.</div>';
+    return;
+  }
+  peopleList.innerHTML = "";
+  knownFaces.forEach((p, idx) => {
+    const row = document.createElement("div");
+    row.className = "person";
+    row.innerHTML = `<span>${escapeHtml(p.name)} <span style="color:#5b6472">(${p.descriptors.length} sample${p.descriptors.length>1?'s':''})</span></span>`;
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "btn-danger";
+    removeBtn.textContent = "Remove";
+    removeBtn.onclick = () => {
+      knownFaces.splice(idx, 1);
+      rebuildMatcher();
+      saveToStorage();
+      renderPeopleList();
+    };
+    row.appendChild(removeBtn);
+    peopleList.appendChild(row);
+  });
+}
+
+function escapeHtml(str){
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+async function setup(){
+  statusTag.textContent = "loading models…";
+  await Promise.all([
+    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+  ]);
+  modelsReady = true;
+
+  loadFromStorage();
+  rebuildMatcher();
+  renderPeopleList();
+
+  statusTag.textContent = "starting camera…";
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({ video: {} });
+    video.srcObject = stream;
+  }catch(e){
+    statusTag.textContent = "camera denied";
+    statusTag.classList.add("warn");
+    return;
+  }
+
+  video.addEventListener("loadedmetadata", () => {
+    overlay.width = video.videoWidth;
+    overlay.height = video.videoHeight;
+    statusTag.textContent = "ready";
+    statusTag.classList.add("ready");
+    registerBtn.disabled = false;
+    detectLoop();
+  });
+}
+
+async function detectLoop(){
+  const ctx = overlay.getContext("2d");
+  const displaySize = { width: overlay.width, height: overlay.height };
+
+  const detections = await faceapi
+    .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+    .withFaceLandmarks()
+    .withFaceDescriptors();
+
+  const resized = faceapi.resizeResults(detections, displaySize);
+  ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+  resized.forEach(det => {
+    const box = det.detection.box;
+    let label = "unknown";
+    let color = "#e8a978";
+
+    if(faceMatcher){
+      const match = faceMatcher.findBestMatch(det.descriptor);
+      if(match.label !== "unknown"){
+        label = match.label;
+        color = "#3a6b5c";
+      }
+    }
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(box.x, box.y, box.width, box.height);
+
+    ctx.font = "14px Inter, sans-serif";
+    const textWidth = ctx.measureText(label).width;
+    ctx.fillStyle = color;
+    ctx.fillRect(box.x, box.y - 22, textWidth + 12, 22);
+    ctx.fillStyle = "#0e1116";
+    ctx.fillText(label, box.x + 6, box.y - 6);
+  });
+
+  requestAnimationFrame(detectLoop);
+}
+
+registerBtn.addEventListener("click", async () => {
+  const name = nameInput.value.trim();
+  if(!name){
+    nameInput.focus();
+    return;
+  }
+
+  const detection = await faceapi
+    .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+    .withFaceLandmarks()
+    .withFaceDescriptor();
+
+  if(!detection){
+    alert("No face detected. Make sure your face is clearly visible and try again.");
+    return;
+  }
+
+  const existing = knownFaces.find(p => p.name.toLowerCase() === name.toLowerCase());
+  if(existing){
+    existing.descriptors.push(detection.descriptor);
+  } else {
+    knownFaces.push({ name, descriptors: [detection.descriptor] });
+  }
+
+  rebuildMatcher();
+  saveToStorage();
+  renderPeopleList();
+  nameInput.value = "";
+});
+
+nameInput.addEventListener("keydown", (e) => {
+  if(e.key === "Enter") registerBtn.click();
+});
+
+clearBtn.addEventListener("click", () => {
+  if(confirm("Remove all registered faces? This can't be undone.")){
+    knownFaces = [];
+    faceMatcher = null;
+    localStorage.removeItem(STORAGE_KEY);
+    renderPeopleList();
+  }
+});
+
+setup();
+</script>
+</body>
+</html>
+
