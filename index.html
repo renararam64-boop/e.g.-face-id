@@ -215,7 +215,11 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/face-api.js/0.22.2/face-api.min.js"></script>
 <script>
-const MODEL_URL = "https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights";
+const MODEL_URLS = [
+  "https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights",
+  "https://raw.githack.com/justadudewhohacks/face-api.js/master/weights",
+  "https://justadudewhohacks.github.io/face-api.js/models",
+];
 const video = document.getElementById("video");
 const overlay = document.getElementById("overlay");
 const statusTag = document.getElementById("statusTag");
@@ -298,16 +302,34 @@ function escapeHtml(str){
 
 async function setup(){
   statusTag.textContent = "loading models…";
-  try{
-    await Promise.all([
-      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-      faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-      faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-    ]);
-  }catch(e){
+  let loaded = false;
+  let lastError = null;
+
+  for(const url of MODEL_URLS){
+    try{
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri(url),
+        faceapi.nets.faceLandmark68Net.loadFromUri(url),
+        faceapi.nets.faceRecognitionNet.loadFromUri(url),
+      ]);
+      loaded = true;
+      break;
+    }catch(e){
+      lastError = e;
+      console.warn("Model source failed, trying next:", url, e);
+    }
+  }
+
+  if(!loaded){
     statusTag.textContent = "failed to load models";
     statusTag.classList.add("warn");
-    console.error("Model load error:", e);
+    console.error("All model sources failed:", lastError);
+    const retryBtn = document.createElement("button");
+    retryBtn.textContent = "Retry";
+    retryBtn.className = "btn-ghost";
+    retryBtn.style.marginLeft = "8px";
+    retryBtn.onclick = () => location.reload();
+    statusTag.after(retryBtn);
     return;
   }
   modelsReady = true;
