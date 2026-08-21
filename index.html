@@ -215,7 +215,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/face-api.js/0.22.2/face-api.min.js"></script>
 <script>
-const MODEL_URL = "https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights";
+const MODEL_URL = "https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights";
 const video = document.getElementById("video");
 const overlay = document.getElementById("overlay");
 const statusTag = document.getElementById("statusTag");
@@ -298,11 +298,18 @@ function escapeHtml(str){
 
 async function setup(){
   statusTag.textContent = "loading models…";
-  await Promise.all([
-    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-  ]);
+  try{
+    await Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+      faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+      faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+    ]);
+  }catch(e){
+    statusTag.textContent = "failed to load models";
+    statusTag.classList.add("warn");
+    console.error("Model load error:", e);
+    return;
+  }
   modelsReady = true;
 
   loadFromStorage();
@@ -416,4 +423,3 @@ setup();
 </script>
 </body>
 </html>
-
